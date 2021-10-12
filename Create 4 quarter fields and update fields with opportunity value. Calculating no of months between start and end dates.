@@ -1,12 +1,10 @@
 public class OpportunityTriggerHandler {
     
     public void fteQuarterUpdates(List<Opportunity> OppList,map<id,opportunity> oldoppMap){
-      
-        
-        for (Opportunity opp: OppList) {
-            
-        Opportunity oldopp = oldoppMap.get(opp.ID);
 		
+		 for (Opportunity opp: OppList) {
+		 
+		Opportunity oldopp = oldoppMap.get(opp.ID);
 		Date Startdate;
         Date Enddate;
         Date newEndDate;
@@ -27,19 +25,16 @@ public class OpportunityTriggerHandler {
             || 
             opp.Data_update_discovery__c !=oldopp.Data_update_discovery__c) 
            && opp.Deal_Structure__c == 'FTE') {
-            
-        
-        if(opp.Projected_Project_Start_Date__c != null && opp.Projected_Project_End_Date__c != null){
+			   
+		if(opp.Projected_Project_Start_Date__c != null && opp.Projected_Project_End_Date__c != null){
         Startdate =opp.Projected_Project_Start_Date__c;
         Enddate = opp.Projected_Project_End_Date__c;
 		n=Startdate.monthsbetween(Enddate)+1;
 		amount = opp.Weighted_Opportunity_Value__c/n;  		
-        }
-
-      
-          for (Integer i = 0; i < n; i++) {
-            
-            newEndDate=opp.Projected_Project_Start_Date__c.addmonths(i).toStartOfMonth() ;
+        }	   
+		for (Integer i = 0; i < n; i++) {
+			
+		newEndDate=opp.Projected_Project_Start_Date__c.addmonths(i).toStartOfMonth() ;
         
             if(newEndDate <= opp.Projected_Project_End_Date__c){
                
@@ -54,11 +49,8 @@ public class OpportunityTriggerHandler {
                 } else if(quarter==4){
                     q4++;
                 }
-            }
-           }
-            
-                    
-            if(q1>0){
+            }	
+			if(q1>0){
                 opp.Q1_Target__c =amount*q1;
                
             }else{
@@ -81,14 +73,14 @@ public class OpportunityTriggerHandler {
             }else{
                 opp.Q4_Target__c =null;
             }
-           
-           }          
-        }
-        
+			
+		}			
+		 }		
+		 
+		 }
+	
     } 
-    
-    
-    public static Integer getQuarterNumber(Date d) {
+	public static Integer getQuarterNumber(Date d) {
         if(d.month() >= 1 && d.month() <= 3)
             return 1;
         else if (d.month() >= 4 && d.month() <= 6)
@@ -98,5 +90,11 @@ public class OpportunityTriggerHandler {
         else 
             return 4;
     }
-
 }
+   
+		
+	
+		
+            
+        
+ 
