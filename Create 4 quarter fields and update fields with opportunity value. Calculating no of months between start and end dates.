@@ -1,55 +1,86 @@
 public class OpportunityTriggerHandler {
-    public void fteQuarterUpdates(List<Opportunity> oppList, Map<Id, Opportunity> oldOppMap) {
-        for (Opportunity opp : oppList) {
-            Opportunity oldOpp = oldOppMap.get(opp.Id);
-            if (shouldRecalculateQuarterTargets(opp, oldOpp)) {
-                if (opp.Projected_Project_Start_Date__c != null && opp.Projected_Project_End_Date__c != null) {
-                    Integer numOfMonths = opp.Projected_Project_Start_Date__c.monthsBetween(opp.Projected_Project_End_Date__c) + 1;
-                    if (numOfMonths > 0) {
-                        Decimal monthlyAmount = opp.Weighted_Opportunity_Value__c.divide(numOfMonths, 2);
-                        recalculateQuarterTargets(opp, monthlyAmount);
-                    } else {
-                        resetQuarterTargets(opp);
-                    }
+
+    public void fteQuarterUpdates(List<Opportunity> OppList, Map<Id, Opportunity> oldoppMap) {
+
+        for (Opportunity opp : OppList) {
+            Opportunity oldopp = oldoppMap.get(opp.Id);
+            if (opp.Deal_Structure__c != 'FTE' || oldopp == null) {
+                continue;
+            }
+            Decimal oldAmount = oldopp.Weighted_Opportunity_Value__c;
+            Decimal newAmount = opp.Weighted_Opportunity_Value__c;
+            Date oldStart = oldopp.Projected_Project_Start_Date__c;
+            Date oldEnd = oldopp.Projected_Project_End_Date__c;
+            Date newStart = opp.Projected_Project_Start_Date__c;
+            Date newEnd = opp.Projected_Project_End_Date__c;
+            Datetime oldUpdate = oldopp.Data_update_discovery__c;
+            Datetime newUpdate = opp.Data_update_discovery__c;
+            if (oldAmount == newAmount && oldStart == newStart && oldEnd == newEnd && oldUpdate == newUpdate) {
+                continue;
+            }
+            if (newStart != null && newEnd != null) {
+                Integer quarterCount = getQuarterCount(newStart, newEnd);
+                if (quarterCount > 0) {
+                    Decimal amountPerQuarter = newAmount / quarterCount;
+                    opp.Q1_Target__c = quarterCount >= 1 ? amountPerQuarter : null;
+                    opp.Q2_Target__c = quarterCount >= 2 ? amountPerQuarter : null;
+                    opp.Q3_Target__c = quarterCount >= 3 ? amountPerQuarter : null;
+                    opp.Q4_Target__c = quarterCount >= 4 ? amountPerQuarter : null;
                 } else {
-                    resetQuarterTargets(opp);
+                    opp.Q1_Target__c = null;
+                    opp.Q2_Target__c = null;
+                    opp.Q3_Target__c = null;
+                    opp.Q4_Target__c = null;
                 }
             }
         }
     }
 
-    private boolean shouldRecalculateQuarterTargets(Opportunity opp, Opportunity oldOpp) {
-        return opp.Deal_Structure__c == 'FTE'
-                && (opp.Weighted_Opportunity_Value__c != oldOpp.Weighted_Opportunity_Value__c
-                || opp.Projected_Project_Start_Date__c != oldOpp.Projected_Project_Start_Date__c
-                || opp.Projected_Project_End_Date__c != oldOpp.Projected_Project_End_Date__c
-                || opp.Deal_Structure__c != oldOpp.Deal_Structure__c
-                || opp.Data_update_discovery__c != oldOpp.Data_update_discovery__c);
-    }
-
-    private void resetQuarterTargets(Opportunity opp) {
-        opp.Q1_Target__c = null;
-        opp.Q2_Target__c = null;
-        opp.Q3_Target__c = null;
-        opp.Q4_Target__c = null;
-    }
-
-    private void recalculateQuarterTargets(Opportunity opp, Decimal monthlyAmount) {
-        Map<Integer, Integer> quarterCounts = new Map<Integer, Integer>{1 => 0, 2 => 0, 3 => 0, 4 => 0};
-        Date startDate = opp.Projected_Project_Start_Date__c.toStartOfMonth();
-        Date endDate = opp.Projected_Project_End_Date__c.toStartOfMonth();
-        while (startDate <= endDate) {
-            Integer quarter = getQuarterNumber(startDate);
-            quarterCounts.put(quarter, quarterCounts.get(quarter) + 1);
-            startDate = startDate.addMonths(1);
+    public static Integer getQuarterCount(Date startDate, Date endDate) {
+        DateRange range = new DateRange(startDate, endDate);
+        Integer quarterCount = 0;
+        for (DateRange quarterRange : range.splitByQuarter()) {
+            quarterCount++;
         }
-        opp.Q1_Target__c = quarterCounts.get(1) > 0 ? monthlyAmount * quarterCounts.get(1) : null;
-        opp.Q2_Target__c = quarterCounts.get(2) > 0 ? monthlyAmount * quarterCounts.get(2) : null;
-        opp.Q3_Target__c = quarterCounts.get(3) > 0 ? monthlyAmount * quarterCounts.get(3) : null;
-        opp.Q4_Target__c = quarterCounts.get(4) > 0 ? monthlyAmount * quarterCounts.get(4) : null;
+        return quarterCount;
     }
 
-    public static Integer getQuarterNumber(Date d) {
-        return Math.ceil(d.month() / 3);
-    }
-}
+    public class DateRange {
+        private Date startDate;
+        private Date endDate;
+
+        public DateRange(Date startDate, Date endDate) {
+            this.startDate = startDate;
+            this.endDate = endDate;
+        }
+
+        public List<DateRange> splitByQuarter() {
+            List<DateRange> quarters = new List<DateRange>();
+            Integer startQuarter = getQuarterNumber(startDate);
+            Integer endQuarter = getQuarterNumber(endDate);
+            if (startQuarter <= endQuarter) {
+                for (Integer quarter = startQuarter; quarter <= endQuarter; quarter++) {
+                    DateRange quarterRange = getQuarterRange(quarter);
+                    if (quarterRange != null) {
+                        quarters.add(quarterRange);
+                    }
+                }
+            } else {
+                for (Integer quarter = startQuarter; quarter <= 4; quarter++) {
+                    DateRange quarterRange = getQuarterRange(quarter);
+                    if (quarterRange != null) {
+                        quarters.add(quarterRange);
+                    }
+                }
+                for (Integer quarter = 1; quarter <= endQuarter; quarter++) {
+                    DateRange quarterRange = getQuarterRange(quarter);
+                    if (quarterRange != null) {
+                        quarters.add(quarterRange);
+                    }
+                }
+            }
+            return quarters;
+        }
+
+        private Integer getQuarterNumber(Date d) {
+            return (Math.ceil(d.month() / 3
